@@ -1,0 +1,46 @@
+[
+  {
+    "name": "Create users table",
+    "sql": "CREATE TABLE users (id UUID PRIMARY KEY REFERENCES auth.users(id), full_name TEXT, avatar_url TEXT);"
+  },
+  {
+    "name": "Create devices table",
+    "sql": "CREATE TABLE devices (device_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), owner_id UUID REFERENCES auth.users(id), unique_code TEXT NOT NULL UNIQUE, status TEXT DEFAULT 'pending', last_seen TIMESTAMPTZ, device_name TEXT); ALTER TABLE devices ENABLE ROW LEVEL SECURITY;"
+  },
+  {
+    "name": "Create devices RLS policies",
+    "sql": "CREATE POLICY \"Ad owners can view their own devices.\" ON devices FOR SELECT USING (auth.uid() = owner_id); CREATE POLICY \"Ad owners can create devices.\" ON devices FOR INSERT WITH CHECK (auth.uid() = owner_id); CREATE POLICY \"Ad owners can update their own devices.\" ON devices FOR UPDATE USING (auth.uid() = owner_id);"
+  },
+  {
+    "name": "Create content table",
+    "sql": "CREATE TABLE content (content_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), owner_id UUID REFERENCES auth.users(id), file_url TEXT, content_type TEXT, created_at TIMESTAMPTZ DEFAULT now()); ALTER TABLE content ENABLE ROW LEVEL SECURITY;"
+  },
+  {
+    "name": "Create content RLS policies",
+    "sql": "CREATE POLICY \"Ad owners can view their own content.\" ON content FOR SELECT USING (auth.uid() = owner_id); CREATE POLICY \"Ad owners can create content.\" ON content FOR INSERT WITH CHECK (auth.uid() = owner_id); CREATE POLICY \"Ad owners can update their own content.\" ON content FOR UPDATE USING (auth.uid() = owner_id);"
+  },
+  {
+    "name": "Create playlists table",
+    "sql": "CREATE TABLE playlists (playlist_id UUID PRIMARY KEY DEFAULT gen_random_uuid(), device_id UUID REFERENCES devices(device_id), content_id UUID REFERENCES content(content_id), start_time TIMESTAMPTZ, end_time TIMESTAMPTZ, \"order\" INTEGER); ALTER TABLE playlists ENABLE ROW LEVEL SECURITY;"
+  },
+  {
+    "name": "Create playlists RLS policies",
+    "sql": "CREATE POLICY \"Ad owners can view their own playlists.\" ON playlists FOR SELECT USING (auth.uid() = (SELECT owner_id FROM devices WHERE device_id = playlists.device_id)); CREATE POLICY \"Ad owners can create playlists.\" ON playlists FOR INSERT WITH CHECK (auth.uid() = (SELECT owner_id FROM devices WHERE device_id = playlists.device_id)); CREATE POLICY \"Ad owners can update their own playlists.\" ON playlists FOR UPDATE USING (auth.uid() = (SELECT owner_id FROM devices WHERE device_id = playlists.device_id));"
+  },
+  {
+    "name": "Create function to handle new user",
+    "sql": "CREATE OR REPLACE FUNCTION public.handle_new_user() RETURNS trigger AS $$ BEGIN INSERT INTO public.users (id, full_name, avatar_url) VALUES (new.id, new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'avatar_url') ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, avatar_url = EXCLUDED.avatar_url; RETURN new; END; $$ LANGUAGE plpgsql SECURITY DEFINER;"
+  },
+  {
+    "name": "Create trigger for new user",
+    "sql": "CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();"
+  },
+  {
+    "name": "Create function to handle user updates",
+    "sql": "CREATE OR REPLACE FUNCTION public.handle_user_update() RETURNS trigger AS $$ BEGIN UPDATE public.users SET full_name = new.raw_user_meta_data->>'full_name', avatar_url = new.raw_user_meta_data->>'avatar_url' WHERE id = new.id; RETURN new; END; $$ LANGUAGE plpgsql SECURITY DEFINER;"
+  },
+  {
+    "name": "Create trigger for user updates",
+    "sql": "CREATE TRIGGER on_auth_user_updated AFTER UPDATE ON auth.users FOR EACH ROW EXECUTE PROCEDURE public.handle_user_update();"
+  }
+]
