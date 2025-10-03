@@ -1,0 +1,16 @@
+{
+  "name": "player",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "electron": "^27.0.3",
+    "@supabase/supabase-js": "^2.38.4"
+  }
+}
